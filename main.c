@@ -24,6 +24,14 @@ struct Window_t {
 
 int term_width, term_height;
 
+char *REP[] = {
+    [ALIVE]="█",
+    //[ALIVE]="#",
+    [DYING]="&",
+    [DEAD]="."
+};
+
+
 int REP_COLOR[][9] = {
     [GOL] = {
         [ALIVE]=WHITE,
@@ -129,12 +137,15 @@ int put_str(struct Window_t *win, char *s, int fg, int bg, int x, int y){
     return 1;
 }
 
+// TODO: Fazer para renderizar com cores
+// TODO: Fazer para renderizar com payloads
+// TODO: Fazer para renderizar com diff entre iteraões
 void render_window(struct Window_t *win){
     pushCursor();
     for (int i = 0; i < win->height; i++){
         moveCursor(win->x, win->y+i);
         for (int j = 0; j < win->width; j++)
-            printf(ESC"[%dm%s"ESC"[m", win->cells[i*win->width + j].bg, win->cells[i*win->width + j].val);
+            printf(win->cells[i*win->width + j].val);
     }
     fflush(stdout);
     popCursor();
@@ -200,6 +211,18 @@ void exit_celular_automata(int s){
     destroy_window(win);
     moveCursor(1, term_height - 1);
     EXIT;
+}
+
+void render(int *grid, int w, int h, int curr_automaton){
+    (void)curr_automaton;
+    for (int i = 0; i < h; i++){
+        moveCursor((term_width - w)/2, 1+(term_height - h)/2 + i);
+        for (int j = 0; j < w; j++){
+            printf(REP[grid[i*w+j]]);
+        }
+    }
+    //printf(ESC"[m");
+    fflush(stdout);
 }
 
 int set_grid_cell(int *grid, int w, int h, int x, int y, int state){
@@ -304,8 +327,9 @@ int main(int argc, char **argv){
 
             for (int i = 0; i < draw_win->height; i++)
                 for (int j = 0; j < draw_win->width; j++)
-                    put_char(draw_win, " ", DEFAULT, REP_COLOR[curr_automaton][grid[i*draw_win->width+j]], j, i);
+                    put_char(draw_win, REP[grid[i*draw_win->width+j]], DEFAULT, DEFAULT, j, i);
 
+            //render(grid, grid_width, grid_height, curr_automaton);
             render_window(draw_win);
             render_sig = 0;
         }
@@ -328,6 +352,9 @@ int main(int argc, char **argv){
                 break;
             case ARROW_RIGHT:
                 curr_automaton = MOD_INC(curr_automaton, 5);
+                break;
+            case ARROW_LEFT:
+                curr_automaton = MOD_DEC(curr_automaton, 5);
                 break;
             case MOUSE:
                 if (paused && e.button == B1 && e.action == B_PRESSED){

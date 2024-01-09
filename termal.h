@@ -27,7 +27,8 @@
 #define STDOUTF STDOUT_FILENO
 #define TIME_IN_TENTHS_OFSECONDS 0
 #define MAX_EVENT 100
-#define MOD_INC(var, mod) ((var + 1) % (mod))
+#define MOD_INC(var, mod) (((var) + 1) % (mod))
+#define MOD_DEC(var, mod) ((((var) - 1) % (mod) + (mod)) % (mod))
 // 0000 0000 0001 1111 = 0x1f
 #define CTRL_KEY(c) ((c) & 0x1f)
 #define ESC "\x1b"
