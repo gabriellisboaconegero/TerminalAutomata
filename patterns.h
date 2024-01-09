@@ -1,8 +1,6 @@
 #ifndef PATTERNS_H_
 #define PATTERNS_H_
-#define DEAD 0
-#define ALIVE 1
-#define DYING 2
+#include "./terminal_automata.h"
 
 // retorna se conseguiu colocar o glider [GOL]
 int make_glider(int *grid, int w, int h, int x1, int y1){

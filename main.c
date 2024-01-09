@@ -5,31 +5,7 @@
 #include <unistd.h>
 #include "./termal.h"
 #include "./patterns.h"
-
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-
-#define WIDTH 100
-#define HEIGHT 25
-
-#define DEAD 0
-#define ALIVE 1
-#define DYING 2
-
-#define GOL 0
-#define SEEDS 1
-#define BBRAIN 2
-#define DAN 3
-#define MAZE 4
-
-#define FPS 30
-#define GENPS 10
-
-#define WHITE 15
-#define RED 1
-#define YELLOW 226
-#define BLACK 0
-#define GRAY 240
-#define BLUE 69
+#include "./terminal_automata.h"
 
 struct Cell_t {
     char val[5];
@@ -51,27 +27,27 @@ int term_width, term_height;
 int REP_COLOR[][9] = {
     [GOL] = {
         [ALIVE]=WHITE,
-        [DYING]=RED,
+        [DYING]=DEFAULT,
         [DEAD]=BLACK
     },
     [SEEDS] = {
         [ALIVE]=WHITE,
-        [DYING]=RED,
+        [DYING]=DEFAULT,
         [DEAD]=BLACK
     },
     [BBRAIN] = {
         [ALIVE]=YELLOW,
         [DYING]=RED,
-        [DEAD]=GRAY
+        [DEAD]=CYAN
     },
     [DAN] = {
         [ALIVE]=WHITE,
-        [DYING]=RED,
+        [DYING]=DEFAULT,
         [DEAD]=BLACK
     },
     [MAZE] = {
         [ALIVE]=BLUE,
-        [DYING]=RED,
+        [DYING]=DEFAULT,
         [DEAD]=BLACK
     }
 };
@@ -131,12 +107,12 @@ int put_char(struct Window_t *win, char *c, int fg, int bg, int x, int y){
         return 0;
     while((win->cells[i].val[n++] = *(c++)) != '\0' && n < 5);
     win->cells[i].fg = fg;
-    win->cells[i].bg = bg;
+    win->cells[i].bg = bg+10;
 
     return 1;
 }
 
-int put_str(struct Window_t *win, char *s, int x, int y){
+int put_str(struct Window_t *win, char *s, int fg, int bg, int x, int y){
     int i;
     if (win == NULL)
         return 0;
@@ -144,7 +120,11 @@ int put_str(struct Window_t *win, char *s, int x, int y){
     i = y*win->width + x;
     if (!(0 <= i && i < win->size))
         return 0;
-    while((win->cells[i++].val[0] = *(s++)) != '\0' && i < win->size);
+    while(*s != '\0' && i < win->size){
+        win->cells[i].fg = fg;
+        win->cells[i].bg = bg+10;
+        win->cells[i++].val[0] = *(s++);
+    }
 
     return 1;
 }
@@ -154,7 +134,7 @@ void render_window(struct Window_t *win){
     for (int i = 0; i < win->height; i++){
         moveCursor(win->x, win->y+i);
         for (int j = 0; j < win->width; j++)
-            printf(ESC"[38;5;%dm%s"ESC"[m", win->cells[i*win->width + j].fg, win->cells[i*win->width + j].val);
+            printf(ESC"[%dm%s"ESC"[m", win->cells[i*win->width + j].bg, win->cells[i*win->width + j].val);
     }
     fflush(stdout);
     popCursor();
@@ -215,7 +195,7 @@ void exit_celular_automata(int s){
     size_t msg_sz = sizeof(msg);
     struct Window_t *win = create_window(msg_sz, 1, term_width / 2 - msg_sz / 2, term_height / 2);
     clearScreen(FULL);
-    put_str(win, msg, 0, 0);
+    put_str(win, msg, DEFAULT, DEFAULT, 0, 0);
     render_window(win);
     destroy_window(win);
     moveCursor(1, term_height - 1);
@@ -324,7 +304,7 @@ int main(int argc, char **argv){
 
             for (int i = 0; i < draw_win->height; i++)
                 for (int j = 0; j < draw_win->width; j++)
-                    put_char(draw_win, "█", REP_COLOR[curr_automaton][grid[i*draw_win->width+j]], BLACK, j, i);
+                    put_char(draw_win, " ", DEFAULT, REP_COLOR[curr_automaton][grid[i*draw_win->width+j]], j, i);
 
             render_window(draw_win);
             render_sig = 0;
