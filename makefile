@@ -9,3 +9,6 @@ termal.o: termal.c
 
 clear:
 	rm -rf *.o
+
+purge: clear
+	rm -rf main

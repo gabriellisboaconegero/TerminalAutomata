@@ -24,12 +24,56 @@
 #define FPS 30
 #define GENPS 10
 
+#define WHITE 15
+#define RED 1
+#define YELLOW 226
+#define BLACK 0
+#define GRAY 240
+#define BLUE 69
+
+struct Cell_t {
+    char val[5];
+    int bg;
+    int fg;
+};
+
+struct Window_t {
+    int x;
+    int y;
+    int width;
+    int height;
+    int size;
+    struct Cell_t *cells;
+};
+
 int term_width, term_height;
-char *REP[] = {
-    [ALIVE]="█",
-    //[ALIVE]="#",
-    [DYING]="&",
-    [DEAD]=" "
+
+int REP_COLOR[][9] = {
+    [GOL] = {
+        [ALIVE]=WHITE,
+        [DYING]=RED,
+        [DEAD]=BLACK
+    },
+    [SEEDS] = {
+        [ALIVE]=WHITE,
+        [DYING]=RED,
+        [DEAD]=BLACK
+    },
+    [BBRAIN] = {
+        [ALIVE]=YELLOW,
+        [DYING]=RED,
+        [DEAD]=GRAY
+    },
+    [DAN] = {
+        [ALIVE]=WHITE,
+        [DYING]=RED,
+        [DEAD]=BLACK
+    },
+    [MAZE] = {
+        [ALIVE]=BLUE,
+        [DYING]=RED,
+        [DEAD]=BLACK
+    }
 };
 
 char *AUTOMATON_NAME[] = {
@@ -40,16 +84,89 @@ char *AUTOMATON_NAME[] = {
     [MAZE] = "MAZE"
 };
 
-int *init_grid(int w, int h){
-    int *grid = (int *)calloc(w*h, sizeof(int));
+int *create_grid(int w, int h){
+    return(int *)calloc(w*h, sizeof(int));
+}
+
+struct Window_t *create_window(int w, int h, int x, int y){
+    struct Window_t *win = (struct Window_t *)calloc(1, sizeof(struct Window_t));
+    if (win == NULL)
+        return win;
+    win->x = x;
+    win->y = y;
+    win->width = w;
+    win->height = h;
+    win->size = w*h;
+    win->cells = (struct Cell_t *)calloc(win->size, sizeof(struct Cell_t));
+    for (int i = 0; i < w*h; i++){
+        win->cells[i].val[0] = ' ';
+        win->cells[i].fg = WHITE;
+    }
+
+    if (win->cells == NULL){
+        free(win);
+        win = NULL;
+    }
+
+    return win;
+}
+
+struct Window_t *destroy_window(struct Window_t *win){
+    if (win != NULL){
+        if (win->cells != NULL)
+            free(win->cells);
+        free(win);
+    }
+    win = NULL;
+    return win;
+}
+
+int put_char(struct Window_t *win, char *c, int fg, int bg, int x, int y){
+    int i, n = 0;
+    if (win == NULL)
+        return 0;
+
+    i = y*win->width + x;
+    if (!(0 <= i && i < win->size))
+        return 0;
+    while((win->cells[i].val[n++] = *(c++)) != '\0' && n < 5);
+    win->cells[i].fg = fg;
+    win->cells[i].bg = bg;
+
+    return 1;
+}
+
+int put_str(struct Window_t *win, char *s, int x, int y){
+    int i;
+    if (win == NULL)
+        return 0;
+
+    i = y*win->width + x;
+    if (!(0 <= i && i < win->size))
+        return 0;
+    while((win->cells[i++].val[0] = *(s++)) != '\0' && i < win->size);
+
+    return 1;
+}
+
+void render_window(struct Window_t *win){
+    pushCursor();
+    for (int i = 0; i < win->height; i++){
+        moveCursor(win->x, win->y+i);
+        for (int j = 0; j < win->width; j++)
+            printf(ESC"[38;5;%dm%s"ESC"[m", win->cells[i*win->width + j].fg, win->cells[i*win->width + j].val);
+    }
+    fflush(stdout);
+    popCursor();
+}
+
+void init_grid(int *grid, int w, int h){
     memset(grid, DEAD, sizeof(int)*w*h);
     for (int i = 0; i < w*h; i++){
         if (!(rand() % 3))
             //grid[i] = ALIVE;
             grid[i] = DEAD;
     }
-
-     return grid;
 }
 
 int neighbors_count(int *grid, int w, int h, int x, int y){
@@ -86,16 +203,6 @@ void next_gen(
     free(copy);
 }
 
-void render(int *grid, int w, int h){
-    for (int i = 0; i < h; i++){
-        moveCursor((term_width - w)/2, 1+(term_height - h)/2 + i);
-        for (int j = 0; j < w; j++){
-            printf("%s", REP[grid[i*w+j]]);
-        }
-        fflush(stdout);
-    }
-}
-
 double timestamp(){
   struct timespec tp;
   clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
@@ -104,13 +211,14 @@ double timestamp(){
 
 void exit_celular_automata(int s){
     (void)s;
-    char msg[] = "CELULAR AUTOMATA - Clique qualquer tecla para sair";
+    char msg[] = "TERMINAL AUTOMATA - Obrigdo por usar!";
     size_t msg_sz = sizeof(msg);
+    struct Window_t *win = create_window(msg_sz, 1, term_width / 2 - msg_sz / 2, term_height / 2);
     clearScreen(FULL);
-    moveCursor(term_width / 2 - msg_sz / 2, term_height / 2);
-    printf("%s\n", msg);
+    put_str(win, msg, 0, 0);
+    render_window(win);
+    destroy_window(win);
     moveCursor(1, term_height - 1);
-    usleep(10000);
     EXIT;
 }
 
@@ -126,12 +234,13 @@ int set_grid_cell(int *grid, int w, int h, int x, int y, int state){
 int main(int argc, char **argv){
     (void)argc;
     (void)argv;
-    double time, last_render, last_gen_time;
+    double time, last_gen_time;
     int quit = 0;
     struct Event e;
     int c, grid_width, grid_height;
     int *grid;
-    int paused = 1, step = 0, curr_automaton;
+    int paused = 1, step = 0, curr_automaton, render_sig;
+    struct Window_t *draw_win;
     int (*curr_neighbors_count)(int *, int, int, int, int);
 
     if (!isatty(STDINF))
@@ -139,17 +248,20 @@ int main(int argc, char **argv){
     if (!isatty(STDOUTF))
         KILL("%s", "A saida nao eh um terminal");
 
+    getTerminalSize(&term_width, &term_height);
+
+    grid_height = HEIGHT;
+    grid_width = WIDTH;
+    //grid_height = term_height;
+    //grid_width = term_width;
+    grid_height = MIN(grid_height, term_height - 1);
+
+    draw_win = create_window(grid_width, grid_height, (term_width - grid_width)/2, 1+(term_height - grid_height)/2);
+
     setSigIntHandler(exit_celular_automata);
     setRawTerminal();
     disableCursor();
-    getTerminalSize(&term_width, &term_height);
     setMouseEvents(MOUSE_BUTTON);
-
-    //grid_height = HEIGHT;
-    //grid_width = WIDTH;
-    grid_height = term_height;
-    grid_width = term_width;
-    grid_height = MIN(grid_height, term_height - 1);
 
     int STATE_TABLE[][9][9] = {
         [GOL]= {
@@ -179,21 +291,53 @@ int main(int argc, char **argv){
         },
     };
     
-    curr_automaton = MAZE;
-    grid = init_grid(grid_width, grid_height);
+    curr_automaton = GOL;
+    grid = create_grid(grid_width, grid_height);
+    init_grid(grid, grid_width, grid_height);
     curr_neighbors_count = neighbors_count;
-    //make_glider(grid, grid_width, grid_height, 10, 10);
+    make_glider(grid, grid_width, grid_height, 10, 10);
     //make_oscillator(grid, grid_width, grid_height, 10, 10);
     //make_oscillator2(grid, grid_width, grid_height, 10, 10);
     //make_rocket(grid, grid_width, grid_height, 10, 10);
 
-    last_gen_time = last_render = timestamp();
+    last_gen_time = timestamp();
+    render_sig = 1;
 
     while (!quit){
+        time = timestamp();
+        if ((time - last_gen_time >= 1.0/GENPS && !paused) || step){
+            next_gen(grid, grid_width, grid_height, STATE_TABLE[curr_automaton], curr_neighbors_count);
+            last_gen_time = timestamp();
+            step = 0;
+            render_sig = 1;
+        }
+
+        if (render_sig){
+            clearScreen(FULL);
+            char msg[100];
+            sprintf(msg, "AUTOMATO EM EXECUÇÂO: %s%s", AUTOMATON_NAME[curr_automaton],
+                    paused ? " (pausado - ESPAÇO para continuar)":"");
+            size_t msg_len = strlen(msg);
+            moveCursor(term_width/2 - msg_len/2, 0);
+            printf("%s", msg);
+            fflush(stdout);
+
+            for (int i = 0; i < draw_win->height; i++)
+                for (int j = 0; j < draw_win->width; j++)
+                    put_char(draw_win, "█", REP_COLOR[curr_automaton][grid[i*draw_win->width+j]], BLACK, j, i);
+
+            render_window(draw_win);
+            render_sig = 0;
+        }
+
         c = getEvent(&e);
+        render_sig = 1;
         switch(c){
             case 'q':
                 quit = 1;
+                break;
+            case 'r':
+                init_grid(grid, grid_width, grid_height);
                 break;
             case 'n':
                 if (paused)
@@ -208,34 +352,17 @@ int main(int argc, char **argv){
             case MOUSE:
                 if (paused && e.button == B1 && e.action == B_PRESSED){
                     set_grid_cell(grid, grid_width, grid_height,
-                            e.x-(term_width - grid_width)/2,
-                            e.y-(term_height - grid_height)/2, ALIVE);
+                            e.x-draw_win->x,
+                            e.y-draw_win->y, ALIVE);
                 }
                 break;
-        }
-        time = timestamp();
-        if ((time - last_gen_time >= 1.0/GENPS && !paused) || step){
-            next_gen(grid, grid_width, grid_height, STATE_TABLE[curr_automaton], curr_neighbors_count);
-            last_gen_time = timestamp();
-            step = 0;
-        }
-
-        if (time - last_render >= 1.0/FPS){
-            clearScreen(FULL);
-            char msg[100];
-            sprintf(msg, "AUTOMATO EM EXECUÇÂO: %s%s", AUTOMATON_NAME[curr_automaton],
-                    paused ? " (pausado - ESPAÇO para continuar)":"");
-            size_t msg_len = strlen(msg);
-            moveCursor(term_width/2 - msg_len/2, 0);
-            printf("%s", msg);
-            fflush(stdout);
-
-            render(grid, grid_width, grid_height);
-            last_render = timestamp();
+            default:
+                render_sig = 0;
         }
     }
 
     free(grid);
+    destroy_window(draw_win);
     exit_celular_automata(0);
 
     return 0;
